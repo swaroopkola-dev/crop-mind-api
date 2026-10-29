@@ -53,7 +53,6 @@ def login_allowed(db: Database, email: str) -> bool:
 
 
 def record_failed_login(db: Database, email: str) -> None:
-    settings = get_settings()
     now = utcnow()
     key = identifier_hash(email)
     current = db.login_attempts.find_one({"identifier_hash": key}) or {"failed_count": 0}
