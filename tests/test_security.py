@@ -1,5 +1,4 @@
-import pytest
-
+from app.core.config import Settings
 from app.core.security import hash_password, new_refresh_token, token_hash, verify_password
 
 
@@ -18,9 +17,7 @@ def test_refresh_token_is_random_and_only_digest_should_be_stored():
     assert len(token_hash(first)) == 64
 
 
-def test_environment_contract_has_requested_keys_only():
-    from app.core.config import Settings
-
+def test_settings_contract_uses_requested_names_and_defaults():
     settings = Settings(_env_file=None)
     assert settings.db_name == "cropmind"
     assert settings.jwt_algorithm == "HS256"
