@@ -42,32 +42,32 @@ Tests use fake crop profiles and do not require a live database. For integration
 
 ## Environment variables
 
-The `.env.example` file contains the complete environment contract. The application uses only these keys:
+The `.env.example` file defines exactly these configuration keys:
 
 - `MONGODB_URI`: MongoDB connection URI.
-- `DB_NAME`: database name (default example: `cropmind`).
-- `JWT_SECRET`: high-entropy signing secret; at least 32 characters in production.
-- `JWT_ALGORITHM`: `HS256` for this implementation.
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: access token lifetime in minutes.
-- `REFRESH_TOKEN_EXPIRE_DAYS`: refresh token lifetime in days.
+- `DB_NAME`: MongoDB database name.
+- `JWT_SECRET`: signing secret of at least 32 characters in production.
+- `JWT_ALGORITHM`: currently supports `HS256`.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: access-token lifetime in minutes.
+- `REFRESH_TOKEN_EXPIRE_DAYS`: refresh-token lifetime in days.
 - `GEMINI_API_KEY`: optional server-side Gemini API key.
-- `GEMINI_MODEL`: model identifier, default example `gemini-3.8-flash`.
-- `GEMINI_TIMEOUT_SECONDS`: request timeout for Gemini explanation.
+- `GEMINI_MODEL`: Gemini model identifier.
+- `GEMINI_TIMEOUT_SECONDS`: Gemini explanation timeout.
 - `FRONTEND_ORIGIN`: exact frontend origin allowed by CORS.
 - `CRON_SECRET`: optional secret reserved for authenticated scheduled jobs.
-- `SIMULATOR_ENABLED`: whether synthetic simulator functionality is enabled.
-- `ADMIN_SEED_EMAIL`: optional initial administrator email for the seed operation.
-- `ADMIN_SEED_PASSWORD`: optional initial administrator password for the seed operation.
-- `SEED_TOKEN`: secret used to authorize the protected admin seed route.
-- `ENVIRONMENT`: environment such as `development` or `production`.
-- `LOG_LEVEL`: Python logging level (for example, `INFO`).
+- `SIMULATOR_ENABLED`: simulator feature toggle.
+- `ADMIN_SEED_EMAIL`: initial administrator email for seed setup.
+- `ADMIN_SEED_PASSWORD`: initial administrator password for seed setup.
+- `SEED_TOKEN`: secret for the protected seed endpoint.
+- `ENVIRONMENT`: such as `development` or `production`.
+- `LOG_LEVEL`: Python log level, for example `INFO`.
 
-Keep secrets in the hosting provider's secret environment-variable store; never commit their values.
+Use Vercel environment variables for deployment secrets. Do not commit `.env` or paste secret values into issue trackers.
 
 ## API
 
-Routes are prefixed `/api`. Open `/docs` in development. Health is `/api/health`.
+Routes are prefixed `/api`. Open `/docs` for the API schema. Health is `/api/health`.
 
-## Atlas setup note
+## Data and limitations
 
-`scripts/seed.py` creates indexes with TTL options using PyMongo. Token expiry is also checked in application code and does not depend on TTL cleanup.
+Seed crop ranges are approximate educational data. They are not verified crop advisories and do not guarantee yield or crop success. Token expiration is checked in application code independently of TTL cleanup.
