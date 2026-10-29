@@ -3,7 +3,6 @@ import os
 from datetime import datetime, timezone
 
 from pymongo import MongoClient
-from pymongo.errors import DuplicateKeyError
 
 from app.core.security import hash_password, validate_password_policy
 from app.db.indexes import ensure_indexes
@@ -18,7 +17,15 @@ def crop(name, ph, n, p, k, rain, temp, humidity, soils, seasons, note):
         "name": name,
         "name_key": name.casefold(),
         "active": True,
-        "ranges": {"ph": r(*ph), "nitrogen": r(*n), "phosphorus": r(*p), "potassium": r(*k), "rainfall_mm": r(*rain), "temperature_c": r(*temp), "humidity_pct": r(*humidity)},
+        "ranges": {
+            "ph": r(*ph),
+            "nitrogen": r(*n),
+            "phosphorus": r(*p),
+            "potassium": r(*k),
+            "rainfall_mm": r(*rain),
+            "temperature_c": r(*temp),
+            "humidity_pct": r(*humidity),
+        },
         "soil_types": soils,
         "seasons": seasons,
         "data_source_note": note,
@@ -30,7 +37,10 @@ def crop(name, ph, n, p, k, rain, temp, humidity, soils, seasons, note):
     }
 
 
-NOTE = "Approximate educational prototype profile; verify against authoritative local agronomic sources before real-world decisions."
+NOTE = (
+    "Approximate educational prototype profile; verify against authoritative local agronomic sources "
+    "before real-world decisions."
+)
 CROPS = [
     crop("rice", (5.5, 7.0), (80, 150), (30, 60), (30, 60), (1000, 2000), (20, 32), (70, 90), ["clay", "loamy", "alluvial"], ["Kharif"], NOTE),
     crop("wheat", (6.0, 7.5), (80, 140), (25, 55), (25, 60), (300, 900), (12, 25), (40, 70), ["loamy", "alluvial", "black"], ["Rabi"], NOTE),
@@ -52,18 +62,16 @@ CROPS = [
 
 def main() -> None:
     uri = os.environ.get("MONGODB_URI")
-    database_name = os.environ.get("MONGODB_DATABASE", "cropmind")
+    database_name = os.environ.get("DB_NAME", "cropmind")
     if not uri:
         raise SystemExit("MONGODB_URI is required; refusing to seed without an explicit database target.")
     client = MongoClient(uri, serverSelectionTimeoutMS=5000, appname="CropMindSeed")
     db = client[database_name]
     db.command("ping")
     index_result = ensure_indexes(db)
-    inserted_or_updated = 0
     for doc in CROPS:
         db.crops.update_one({"name_key": doc["name_key"]}, {"$setOnInsert": doc}, upsert=True)
-        inserted_or_updated += 1
-    print(f"Seeded/check: {inserted_or_updated} crop profiles; indexes verified: {sum(map(len, index_result.values()))}.")
+    print(f"Seeded/checked {len(CROPS)} crop profiles; indexes verified: {sum(map(len, index_result.values()))}.")
 
     email = os.environ.get("ADMIN_SEED_EMAIL", "").strip().lower()
     password = os.environ.get("ADMIN_SEED_PASSWORD", "")
@@ -71,7 +79,21 @@ def main() -> None:
         if not email or not password:
             raise SystemExit("Set both ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD, or neither.")
         validate_password_policy(password)
-        db.users.update_one({"email": email}, {"$setOnInsert": {"email": email, "password_hash": hash_password(password), "role": "admin", "status": "active", "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc), "is_synthetic": False}}, upsert=True)
+        db.users.update_one(
+            {"email": email},
+            {
+                "$setOnInsert": {
+                    "email": email,
+                    "password_hash": hash_password(password),
+                    "role": "admin",
+                    "status": "active",
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc),
+                    "is_synthetic": False,
+                }
+            },
+            upsert=True,
+        )
         print("Admin seed account ensured (credentials not printed).")
     client.close()
 
