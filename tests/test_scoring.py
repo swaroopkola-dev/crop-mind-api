@@ -22,7 +22,17 @@ def fake_crop(name="test-crop"):
 
 
 def inputs():
-    return {"soil_type": "loamy", "season": "Kharif", "ph": 6.5, "nitrogen": 100, "phosphorus": 45, "potassium": 45, "rainfall_mm": 1400, "temperature_c": 25, "humidity_pct": 75}
+    return {
+        "soil_type": "loamy",
+        "season": "Kharif",
+        "ph": 6.5,
+        "nitrogen": 100,
+        "phosphorus": 45,
+        "potassium": 45,
+        "rainfall_mm": 1400,
+        "temperature_c": 25,
+        "humidity_pct": 75,
+    }
 
 
 def test_numeric_subscore_ideal_tolerable_and_outside():
@@ -44,7 +54,11 @@ def test_missing_nutrients_reduce_completeness_not_score_as_failure():
     result = score_crop(data, fake_crop())
     assert result["score"] == 100
     assert result["confidence"]["completeness_pct"] == 73
-    assert set(result["confidence"]["missing_inputs"]) == {"nitrogen", "phosphorus", "potassium"}
+    assert set(result["confidence"]["missing_inputs"]) == {
+        "nitrogen",
+        "phosphorus",
+        "potassium",
+    }
 
 
 def test_ranking_ties_are_deterministic_by_name():
