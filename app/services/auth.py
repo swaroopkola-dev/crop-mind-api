@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import hashlib
 
-from bson import ObjectId
 from pymongo.database import Database
 
 from app.core.config import get_settings
