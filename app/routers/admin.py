@@ -1,23 +1,22 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 import csv
 import io
-import secrets
 import random
+import secrets
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo.database import Database
 
-from app.db.client import get_database
 from app.core.config import get_settings
-from app.db.repositories import oid, paginate, safe_doc, write_audit
-from app.dependencies.auth import admin_user
 from app.core.security import hash_password, validate_password_policy
+from app.db.client import get_database
 from app.db.indexes import ensure_indexes
-from app.services.scoring import rank_crops
-from app.db.repositories import utcnow
+from app.db.repositories import oid, paginate, safe_doc, utcnow, write_audit
+from app.dependencies.auth import admin_user
 from app.routers.live import _summary
+from app.services.scoring import rank_crops
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -50,7 +49,10 @@ class SettingsPatch(BaseModel):
 
 
 @router.post("/seed", response_model=SeedResult, tags=["admin-seed"])
-def seed_backend(x_seed_token: str | None = Header(default=None, alias="X-Seed-Token"), db: Database = Depends(get_database)) -> dict:
+def seed_backend(
+    x_seed_token: str | None = Header(default=None, alias="X-Seed-Token"),
+    db: Database = Depends(get_database),
+) -> dict:
     cfg = get_settings()
     expected = cfg.seed_token.get_secret_value() if cfg.seed_token else ""
     if len(expected) < 32 or not x_seed_token or not secrets.compare_digest(x_seed_token, expected):
@@ -58,12 +60,19 @@ def seed_backend(x_seed_token: str | None = Header(default=None, alias="X-Seed-T
     email = (cfg.admin_seed_email or "").strip().lower()
     password = cfg.admin_seed_password.get_secret_value() if cfg.admin_seed_password else ""
     if not email or not password:
-        raise HTTPException(status_code=503, detail="ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD must be configured.")
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_SEED_EMAIL and ADMIN_SEED_PASSWORD must be configured.",
+        )
     try:
         validate_password_policy(password)
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=f"Configured admin password does not meet policy: {exc}") from None
+        raise HTTPException(
+            status_code=503,
+            detail=f"Configured admin password does not meet policy: {exc}",
+        ) from None
     from scripts.seed import CROPS
+
     index_result = ensure_indexes(db)
     now = utcnow()
     for source in CROPS:
@@ -73,20 +82,58 @@ def seed_backend(x_seed_token: str | None = Header(default=None, alias="X-Seed-T
     admin_created = False
     existing = db.users.find_one({"email": email})
     if existing is None:
-        db.users.insert_one({"email": email, "display_name": "CropMind Admin", "password_hash": hash_password(password), "role": "admin", "status": "active", "created_at": now, "updated_at": now, "source": "seed", "is_synthetic": False})
+        db.users.insert_one(
+            {
+                "email": email,
+                "display_name": "CropMind Admin",
+                "password_hash": hash_password(password),
+                "role": "admin",
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "source": "seed",
+                "is_synthetic": False,
+            }
+        )
         admin_created = True
     elif existing.get("role") != "admin":
-        raise HTTPException(status_code=409, detail="ADMIN_SEED_EMAIL already belongs to a non-admin account; no role was changed.")
-    write_audit(db, action="admin.seed.completed", actor_role="system", entity_type="seed", metadata={"crop_count": len(CROPS), "admin_created": admin_created}, source="seed", is_synthetic=False)
+        raise HTTPException(
+            status_code=409,
+            detail="ADMIN_SEED_EMAIL already belongs to a non-admin account; no role was changed.",
+        )
+    write_audit(
+        db,
+        action="admin.seed.completed",
+        actor_role="system",
+        entity_type="seed",
+        metadata={"crop_count": len(CROPS), "admin_created": admin_created},
+        source="seed",
+        is_synthetic=False,
+    )
     return {"crops_upserted": len(CROPS), "admin_created": admin_created, "indexes": index_result}
 
 
 @router.get("/overview")
 def overview(db: Database = Depends(get_database), admin: dict = Depends(admin_user)) -> dict:
     summary = _summary(db, detailed=True)
-    top_pipeline = [{"$match": {"is_synthetic": {"$ne": True}}}, {"$unwind": "$ranked_results"}, {"$group": {"_id": "$ranked_results.crop_name", "count": {"$sum": 1}}}, {"$sort": {"count": -1, "_id": 1}}, {"$limit": 5}]
+    top_pipeline = [
+        {"$match": {"is_synthetic": {"$ne": True}}},
+        {"$unwind": "$ranked_results"},
+        {"$group": {"_id": "$ranked_results.crop_name", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1, "_id": 1}},
+        {"$limit": 5},
+    ]
     summary["top_crops"] = list(db.recommendations.aggregate(top_pipeline))
-    summary["recent_activity"] = [{"action": item["action"], "timestamp": item["timestamp"].isoformat(), "actor_role": item.get("actor_role", "system")} for item in db.activity_logs.find({"is_synthetic": {"$ne": True}}).sort("timestamp", -1).limit(10)]
+    summary["recent_activity"] = [
+        {
+            "action": item["action"],
+            "timestamp": item["timestamp"].isoformat(),
+            "actor_role": item.get("actor_role", "system"),
+        }
+        for item in db.activity_logs.find({"is_synthetic": {"$ne": True}})
+        .sort("timestamp", -1)
+        .limit(10)
+    ]
     return summary
 
 
@@ -138,8 +185,20 @@ def patch_user(user_id: str, payload: UserPatch, db: Database = Depends(get_data
     changes["updated_at"] = datetime.now(timezone.utc)
     db.users.update_one({"_id": target_id}, {"$set": changes})
     if changes.get("status") == "disabled":
-        db.refresh_tokens.update_many({"user_id": target_id, "revoked_at": None}, {"$set": {"revoked_at": datetime.now(timezone.utc)}})
-    write_audit(db, action="admin.user.updated", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="user", entity_id=user_id, metadata={"changed_fields": sorted(changes.keys())})
+        db.refresh_tokens.update_many(
+            {"user_id": target_id, "revoked_at": None},
+            {"$set": {"revoked_at": datetime.now(timezone.utc)}},
+        )
+    write_audit(
+        db,
+        action="admin.user.updated",
+        actor_id=admin["_id"],
+        actor_email=admin["email"],
+        actor_role="admin",
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"changed_fields": sorted(changes.keys())},
+    )
     return {"user": safe_doc(db.users.find_one({"_id": target_id}, {"password_hash": 0}))}
 
 
@@ -152,8 +211,19 @@ def revoke_sessions(user_id: str, db: Database = Depends(get_database), admin: d
     if not db.users.find_one({"_id": target_id}):
         raise HTTPException(status_code=404, detail="User not found.")
     now = datetime.now(timezone.utc)
-    result = db.refresh_tokens.update_many({"user_id": target_id, "revoked_at": None}, {"$set": {"revoked_at": now}})
-    write_audit(db, action="admin.user.sessions_revoked", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="user", entity_id=user_id, metadata={"revoked_count": result.modified_count})
+    result = db.refresh_tokens.update_many(
+        {"user_id": target_id, "revoked_at": None}, {"$set": {"revoked_at": now}}
+    )
+    write_audit(
+        db,
+        action="admin.user.sessions_revoked",
+        actor_id=admin["_id"],
+        actor_email=admin["email"],
+        actor_role="admin",
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"revoked_count": result.modified_count},
+    )
     return {"revoked_sessions": result.modified_count}
 
 
@@ -164,12 +234,18 @@ def recommendations(q: str | None = None, synthetic: bool | None = None, limit: 
         query["is_synthetic"] = synthetic
     if q:
         import re
-        query["$or"] = [{"inputs.season": {"$regex": re.escape(q[:40]), "$options": "i"}}, {"ranked_results.crop_name": {"$regex": re.escape(q[:80]), "$options": "i"}}]
+        query["$or"] = [
+            {"inputs.season": {"$regex": re.escape(q[:40]), "$options": "i"}},
+            {"ranked_results.crop_name": {"$regex": re.escape(q[:80]), "$options": "i"}},
+        ]
     return _recommendation_page(db, query, limit, offset)
 
 
 def _recommendation_page(db: Database, query: dict, limit: int, offset: int) -> dict:
-    items = [safe_doc(item) for item in db.recommendations.find(query).sort("created_at", -1).skip(offset).limit(limit)]
+    items = [
+        safe_doc(item)
+        for item in db.recommendations.find(query).sort("created_at", -1).skip(offset).limit(limit)
+    ]
     return {"items": items, "total": db.recommendations.count_documents(query), "limit": limit, "offset": offset}
 
 
@@ -193,7 +269,15 @@ def delete_recommendation(recommendation_id: str, db: Database = Depends(get_dat
     result = db.recommendations.delete_one({"_id": _id})
     if not result.deleted_count:
         raise HTTPException(status_code=404, detail="Recommendation not found.")
-    write_audit(db, action="admin.recommendation.deleted", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="recommendation", entity_id=recommendation_id)
+    write_audit(
+        db,
+        action="admin.recommendation.deleted",
+        actor_id=admin["_id"],
+        actor_email=admin["email"],
+        actor_role="admin",
+        entity_type="recommendation",
+        entity_id=recommendation_id,
+    )
 
 
 @router.get("/activity")
@@ -225,8 +309,20 @@ def update_settings(payload: SettingsPatch, db: Database = Depends(get_database)
         raise HTTPException(status_code=400, detail="No settings provided.")
     now = datetime.now(timezone.utc)
     for key, value in changes.items():
-        db.settings.update_one({"key": key}, {"$set": {"key": key, "value": value, "updated_at": now, "updated_by": admin["_id"]}}, upsert=True)
-    write_audit(db, action="admin.settings.updated", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="settings", metadata={"keys": sorted(changes.keys())})
+        db.settings.update_one(
+            {"key": key},
+            {"$set": {"key": key, "value": value, "updated_at": now, "updated_by": admin["_id"]}},
+            upsert=True,
+        )
+    write_audit(
+        db,
+        action="admin.settings.updated",
+        actor_id=admin["_id"],
+        actor_email=admin["email"],
+        actor_role="admin",
+        entity_type="settings",
+        metadata={"keys": sorted(changes.keys())},
+    )
     return {"updated": sorted(changes.keys())}
 
 
@@ -245,12 +341,46 @@ def simulator_tick(db: Database = Depends(get_database), admin: dict = Depends(a
     seasons = ["Kharif", "Rabi", "Zaid"]
     generated = 0
     for _ in range(3):
-        inputs = {"soil_type": rng.choice(soil_types), "season": rng.choice(seasons), "ph": round(rng.uniform(4.5, 8.5), 1), "nitrogen": rng.randint(10, 180), "phosphorus": rng.randint(5, 90), "potassium": rng.randint(10, 120), "rainfall_mm": rng.randint(200, 1800), "temperature_c": rng.randint(12, 36), "humidity_pct": rng.randint(25, 95)}
+        inputs = {
+            "soil_type": rng.choice(soil_types),
+            "season": rng.choice(seasons),
+            "ph": round(rng.uniform(4.5, 8.5), 1),
+            "nitrogen": rng.randint(10, 180),
+            "phosphorus": rng.randint(5, 90),
+            "potassium": rng.randint(10, 120),
+            "rainfall_mm": rng.randint(200, 1800),
+            "temperature_c": rng.randint(12, 36),
+            "humidity_pct": rng.randint(25, 95),
+        }
         results = rank_crops(inputs, crops)
         if not results:
             continue
-        db.recommendations.insert_one({"owner_id": None, "inputs": inputs, "ranked_results": results, "missing_inputs": [], "explanation": "Synthetic simulator record for dashboard and pipeline testing; not agronomic advice.", "explanation_source": "fallback", "source": "simulator", "is_synthetic": True, "created_at": now - timedelta(seconds=rng.randint(0, 3600))})
-        db.activity_logs.insert_one({"timestamp": now, "actor_id": admin["_id"], "actor_email": None, "actor_role": "simulator", "action": "simulator.recommendation.generated", "entity_type": "recommendation", "metadata": {"seed": False}, "source": "simulator", "is_synthetic": True})
+        db.recommendations.insert_one(
+            {
+                "owner_id": None,
+                "inputs": inputs,
+                "ranked_results": results,
+                "missing_inputs": [],
+                "explanation": "Synthetic simulator record for dashboard and pipeline testing; not agronomic advice.",
+                "explanation_source": "fallback",
+                "source": "simulator",
+                "is_synthetic": True,
+                "created_at": now - timedelta(seconds=rng.randint(0, 3600)),
+            }
+        )
+        db.activity_logs.insert_one(
+            {
+                "timestamp": now,
+                "actor_id": admin["_id"],
+                "actor_email": None,
+                "actor_role": "simulator",
+                "action": "simulator.recommendation.generated",
+                "entity_type": "recommendation",
+                "metadata": {"seed": False},
+                "source": "simulator",
+                "is_synthetic": True,
+            }
+        )
         generated += 1
     write_audit(db, action="simulator.tick", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="simulator", metadata={"generated": generated})
     return {"generated": generated, "source": "simulator", "is_synthetic": True}
@@ -269,7 +399,6 @@ def purge_synthetic(db: Database = Depends(get_database), admin: dict = Depends(
     counts = {}
     for name in ("recommendations", "comparisons", "users", "activity_logs"):
         counts[name] = db[name].delete_many({"is_synthetic": True}).deleted_count
-    # The live purge audit row is written after the deletion and will remain.
     write_audit(db, action="synthetic.purge", actor_id=admin["_id"], actor_email=admin["email"], actor_role="admin", entity_type="synthetic_data", metadata={"deleted_counts": counts})
     return {"deleted_counts": counts}
 

@@ -9,7 +9,7 @@ FastAPI backend for the CropMind educational crop recommendation prototype.
 - Account registration/login, short-lived JWT access tokens and rotating opaque refresh cookies.
 - Recommendation creation, optional account history, comparison, and fallback-first Gemini explanations.
 - Admin routes, audit events, health endpoint, and ETag-backed summary polling.
-- Vercel Python entrypoint.
+- FastAPI application entrypoint at `api/index.py`.
 
 **Agronomic disclaimer:** seed profile ranges are approximate educational data, not validated farming advice. Scores are suitability heuristics, not probabilities or yield estimates.
 
@@ -20,7 +20,6 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 pip install -r requirements.txt
 cp .env.example .env
-# Set MONGODB_URI to a database you are authorized to use.
 uvicorn app.main:app --reload
 ```
 
@@ -30,7 +29,7 @@ Seed only when intentionally targeting a database you control:
 python -m scripts.seed
 ```
 
-Set `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` to create the first admin. Never commit `.env` or credentials.
+The seed command reads `MONGODB_URI`, `DB_NAME`, `ADMIN_SEED_EMAIL`, and `ADMIN_SEED_PASSWORD`. Never commit `.env` or credentials.
 
 ## Tests
 
@@ -39,18 +38,36 @@ pytest
 ruff check .
 ```
 
-Tests use fake crop profiles and do not require a live database. For integration tests, configure a separate test database and never point destructive tests at production.
+Tests use fake crop profiles and do not require a live database. For integration tests, use a separate test database and never point destructive tests at production.
 
 ## Environment variables
 
-See `.env.example`. Production requires a strong `JWT_SECRET`, secure cookies, a specific CORS origin list, and production environment configuration. Keep `MONGODB_URI` and `GEMINI_API_KEY` on the server only.
+The `.env.example` file defines exactly these configuration keys:
+
+- `MONGODB_URI`: MongoDB connection URI.
+- `DB_NAME`: MongoDB database name.
+- `JWT_SECRET`: signing secret of at least 32 characters in production.
+- `JWT_ALGORITHM`: currently supports `HS256`.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: access-token lifetime in minutes.
+- `REFRESH_TOKEN_EXPIRE_DAYS`: refresh-token lifetime in days.
+- `GEMINI_API_KEY`: optional server-side Gemini API key.
+- `GEMINI_MODEL`: Gemini model identifier.
+- `GEMINI_TIMEOUT_SECONDS`: Gemini explanation timeout.
+- `FRONTEND_ORIGIN`: exact frontend origin allowed by CORS.
+- `CRON_SECRET`: optional secret reserved for authenticated scheduled jobs.
+- `SIMULATOR_ENABLED`: simulator feature toggle.
+- `ADMIN_SEED_EMAIL`: initial administrator email for seed setup.
+- `ADMIN_SEED_PASSWORD`: initial administrator password for seed setup.
+- `SEED_TOKEN`: secret for the protected seed endpoint.
+- `ENVIRONMENT`: such as `development` or `production`.
+- `LOG_LEVEL`: Python log level, for example `INFO`.
+
+Use Vercel environment variables for deployment secrets. Do not commit `.env` or paste secret values into issue trackers.
 
 ## API
 
-Routes are prefixed `/api`. Open `/docs` in development. Health is `/api/health`.
+Routes are prefixed `/api`. Open `/docs` for the API schema. Health is `/api/health`.
 
-Some broader Phase 1 administrative ideas (background simulator generation, full operational analytics, and deployed-runtime validation) remain in progress and are not claimed as complete merely because route shells exist.
+## Data and limitations
 
-## Atlas setup note
-
-`scripts/seed.py` creates indexes with TTL options using the official PyMongo driver. The Atlas connector used during initial provisioning cannot set `expireAfterSeconds`, so named expiry indexes created through that connector are not guaranteed to have TTL behavior until `scripts/seed.py` runs with the configured `MONGODB_URI`. Token expiry is always checked in application code and does not depend on TTL cleanup.
+Seed crop ranges are approximate educational data. They are not verified crop advisories and do not guarantee yield or crop success. Token expiration is checked in application code independently of TTL cleanup.
