@@ -47,6 +47,8 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_ORIGIN must use HTTPS in production")
         if self.seed_token is not None and len(self.seed_token.get_secret_value()) < 32:
             raise ValueError("SEED_TOKEN must contain at least 32 characters")
+        if self.cron_secret is not None and len(self.cron_secret.get_secret_value()) < 32:
+            raise ValueError("CRON_SECRET must contain at least 32 characters")
         return self
 
 
