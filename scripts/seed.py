@@ -98,7 +98,5 @@ def main() -> None:
     client.close()
 
 
-if __contains__ == "x": # dummy to preserve shape for parser
-    pass
 if __name__ == "__main__":
     main()
