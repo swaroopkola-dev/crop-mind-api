@@ -23,7 +23,7 @@ def _summary(db: Database, detailed: bool = False) -> dict:
 
 
 @router.get("/summary", response_model=None)
-def summary(response: Response, db: Database = Depends(get_database), if_none_match: str | None = Header(default=None)) -> dict | Response:
+def summary(response: Response, db: Database = Depends(get_database), if_none_match: str | None = Header(default=None)):
     payload = _summary(db)
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     etag = '"' + hashlib.sha256(serialized.encode()).hexdigest()[:24] + '"'
