@@ -227,6 +227,42 @@ def revoke_sessions(user_id: str, db: Database = Depends(get_database), admin: d
     return {"revoked_sessions": result.modified_count}
 
 
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(user_id: str, response: Response, db: Database = Depends(get_database), admin: dict = Depends(admin_user)) -> Response:
+    try:
+        target_id = oid(user_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="User not found.") from None
+    target = db.users.find_one({"_id": target_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if target_id == admin["_id"]:
+        raise HTTPException(status_code=409, detail="You cannot delete your own administrator account.")
+    if target.get("role") == "admin":
+        active_admins = db.users.count_documents({"role": "admin", "status": "active"})
+        if target.get("status", "active") == "active" and active_admins <= 1:
+            raise HTTPException(status_code=409, detail="The last active administrator cannot be deleted.")
+    now = datetime.now(timezone.utc)
+    db.refresh_tokens.update_many(
+        {"user_id": target_id, "revoked_at": None}, {"$set": {"revoked_at": now}}
+    )
+    # Keep recommendation aggregates while removing the account association.
+    db.recommendations.update_many({"owner_id": target_id}, {"$set": {"owner_id": None}})
+    db.users.delete_one({"_id": target_id})
+    write_audit(
+        db,
+        action="admin.user.deleted",
+        actor_id=admin["_id"],
+        actor_email=admin["email"],
+        actor_role="admin",
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"deleted_role": target.get("role", "user")},
+    )
+    response.status_code = 204
+    return response
+
+
 @router.get("/recommendations")
 def recommendations(q: str | None = None, synthetic: bool | None = None, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0), db: Database = Depends(get_database), admin: dict = Depends(admin_user)) -> dict:
     query: dict = {}
