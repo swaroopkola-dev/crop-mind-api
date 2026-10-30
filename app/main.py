@@ -46,6 +46,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "If-None-Match", "X-Request-ID", "X-Seed-Token"],
+    expose_headers=["ETag", "X-Request-ID"],
 )
 if settings.environment == "production":
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*.vercel.app", "localhost"])
