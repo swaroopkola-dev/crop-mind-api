@@ -10,7 +10,7 @@ FastAPI service for explainable crop suitability recommendations, account sessio
 - Health: https://crop-mind-api.vercel.app/api/health
 
 ## 3. Architecture
-The Vercel Python function imports `api/index.py`, which exposes the FastAPI application in `app/main.py`. Routers depend on shared authentication, database and repository helpers. MongoDB Atlas stores accounts, sessions, crop profiles, recommendations, comparisons, settings and audit events.
+The Vercel Python function is configured through `vercel.json` to serve `api/index.py`, which exposes the FastAPI application in `app/main.py`. Routers depend on shared authentication, database and repository helpers. MongoDB Atlas stores accounts, sessions, crop profiles, recommendations, comparisons, settings and audit events.
 
 ## 4. Technology stack
 Python 3.12, FastAPI, Pydantic, PyMongo, MongoDB Atlas, JWT access tokens, rotating opaque refresh tokens, optional Gemini explanations, Vercel Functions and GitHub Actions.
@@ -52,10 +52,10 @@ The configured backend keys are: `MONGODB_URI`, `DB_NAME`, `JWT_SECRET`, `JWT_AL
 Use Python 3.12+, install `requirements.txt`, configure a private development `.env`, then run `uvicorn app.main:app --reload`. Never point local tests at production data.
 
 ## 15. Testing and CI
-GitHub Actions runs lint and backend tests on changes. Keep tests isolated from production MongoDB. Smoke tests are documented in the project release checklist; destructive simulator and purge endpoints require explicit administrator confirmation.
+GitHub Actions is configured to run Ruff linting and the backend `pytest` suite on pushes and pull requests. The latest `main` commit does not currently expose a GitHub Actions run through the available commit-run/status data, so a green Actions result is not asserted here. The latest commit has a successful Vercel deployment status. Keep tests isolated from production MongoDB. Smoke tests are documented in the project release checklist; destructive simulator and purge endpoints require explicit administrator confirmation. Previous runtime logs included MongoDB connection-refused errors against `localhost:27017`; verify the live health endpoint and Atlas connectivity during release smoke testing.
 
 ## 16. Deployment and demo-only credentials
-Production is connected to the GitHub `main` branch and deployed on Vercel. No shared demo username or password is published. Configure a dedicated demo administrator privately through the seed environment variables and protected seed request; do not use production credentials as demo credentials.
+Production is connected to the GitHub `main` branch and deployed on Vercel. The latest verified production deployment is **Ready** and was built from commit `7a8655b6727fdd9189925126cc4a68e245d76c78` (30 October 2026). The deployment exposes `crop-mind-api.vercel.app`. PR [#1](https://github.com/swaroopkola-dev/crop-mind-api/pull/1), which standardized the backend environment contract, is merged. Vercel has 17 configured backend environment-variable keys targeted to both Production and Preview; values are intentionally not documented here. No shared demo username or password is published. Configure a dedicated demo administrator privately through the seed environment variables and protected seed request; do not use production credentials as demo credentials.
 
 ## 17. Limitations and advisory disclaimer
 Seed profiles are approximate educational examples and have not been validated for every region. Suitability scores are comparative heuristics, not guarantees, yield estimates or probabilities. Consult current soil tests and qualified local agronomists before making agricultural decisions.
