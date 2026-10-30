@@ -299,7 +299,7 @@ def system_status(db: Database = Depends(get_database), admin: dict = Depends(ad
 
 @router.get("/settings")
 def get_settings_route(db: Database = Depends(get_database), admin: dict = Depends(admin_user)) -> dict:
-    return {"items": list(db.settings.find({}, {"_id": 0}))}
+    return {"items": [safe_doc(item) for item in db.settings.find({}, {"_id": 0})]}
 
 
 @router.put("/settings")
