@@ -101,6 +101,19 @@ def seed_backend(
             status_code=409,
             detail="ADMIN_SEED_EMAIL already belongs to a non-admin account; no role was changed.",
         )
+    default_settings = {
+        "registration_enabled": True,
+        "maintenance_banner": "",
+        "fallback_override": False,
+        "poll_interval_ms": 15000,
+        "simulator_enabled": cfg.simulator_enabled,
+    }
+    for key, value in default_settings.items():
+        db.settings.update_one(
+            {"key": key},
+            {"$setOnInsert": {"key": key, "value": value, "updated_at": now, "source": "seed"}},
+            upsert=True,
+        )
     write_audit(
         db,
         action="admin.seed.completed",
