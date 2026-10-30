@@ -1,5 +1,16 @@
-# Scoring method and limitations
+# Method and limitations
 
-Each known numeric factor scores 1.0 within the ideal interval, 0.5 within the wider tolerable interval, and 0 outside tolerance. Soil and season use categorical match values. Known factors are reweighted to 100. Missing optional nutrients remain unknown and reduce completeness rather than being treated as zero.
+## Inputs
+The scoring service evaluates soil type, soil pH, nitrogen, phosphorus, potassium, rainfall, temperature, humidity and season. pH, rainfall, temperature, humidity, soil type and season are required; N/P/K are optional and influence completeness.
 
-The nine complete-input weights are: soil type 5%, season 5%, pH 13.5%, nitrogen 9%, phosphorus 9%, potassium 9%, rainfall 18%, temperature 18%, humidity 13.5%. Crop profile ranges in the initial seed set are approximate engineering assumptions and need authoritative local agronomic review. Suitability scores are not probabilities, yields, or guarantees.
+## Scoring
+Each crop profile contains ideal and tolerable ranges for seven numeric measurements, supported soil types and seasons. The scoring service evaluates each factor and returns ranked suitability scores, factor breakdowns, strengths, weaknesses and confidence/completeness metadata. The ranking is comparative within the active crop dataset.
+
+## Explanations
+Gemini explanations are optional and server-side. If Gemini is unavailable or fails within its configured timeout, a rules-based fallback explanation is returned. The response labels the explanation source.
+
+## Limitations
+The initial crop profiles are educational estimates, not a validated agronomic database. The model does not estimate yield, profit, pest pressure, irrigation availability, market demand, local regulations or future weather. Input measurement quality and dataset coverage affect ranking quality. A high score is not a probability of success.
+
+## Advisory disclaimer
+Use results to explore options and prepare questions, not as standalone planting instructions. Validate with a current soil test and qualified local agronomic advice for the relevant region and season.
